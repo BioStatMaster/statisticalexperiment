@@ -1,9 +1,9 @@
 ---
 title: '[70점] 중간고사 모범 답안'
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -108,7 +108,7 @@ bodydims.csv 데이터를 가지고 성별에 따른 차이를 살펴보고자 �
 bodydims.csv 파일을 불러와 변수 `bodydims`에 저장하시오.
 
 ```{r}
-bodydims <- read.csv("/Users/dwkim/Documents/대학원/2025-S/통계학실험/강의자료/dataset/ch04/bodydims.csv", header=TRUE)
+bodydims <- read.csv("/Users/ejkim/Documents/대학원/2025-S/통계학실험/강의자료/dataset/ch04/bodydims.csv", header=TRUE)
 ```
 
 #### 3.2 (5점)
