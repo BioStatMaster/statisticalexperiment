@@ -128,6 +128,13 @@ compare_one_lambda_all <- function(
     seed = 1,
     include_yang_slow = TRUE,
     include_yagishita = TRUE,
+    yang_multistart = list(
+      enable = FALSE,
+      n_start = 5,
+      top_k = 2,
+      short_ctrl = list(max_iter = 80, min_iter = 10, tol = 1e-3),
+      refine_ctrl = list(max_iter = 800, min_iter = 30, tol = 1e-6)
+    ),
     yang_init = "lasso",
     yang_ctrl = list(
       max_iter = 2000,
@@ -173,42 +180,89 @@ compare_one_lambda_all <- function(
 
   results <- list()
 
+  # ---- Yang (multistart + Top-K refinement)
+  # Multi-start is designed to be cheap:
+  #  1) run short iterations for N starts
+  #  2) select Top-K by objective
+  #  3) refine only Top-K with longer iterations
+  # This pattern improves robustness without heavy cost.
+  run_yang_once <- function(seed_use, ctrl, fast = TRUE) {
+    fn <- if (fast) yang_alg1_slts_fast else yang_alg1_slts_slow
+    base_args <- list(
+      X = X,
+      y = y,
+      h = h,
+      lambda_abs = lambda_abs,
+      intercept = TRUE,
+      init = yang_init,
+      seed = seed_use,
+      verbose = verbose
+    )
+    if (fast) base_args$support_eps <- support_eps
+    do.call(fn, c(base_args, ctrl))
+  }
+
+  run_yang_multistart <- function(fast = TRUE) {
+    if (!isTRUE(yang_multistart$enable)) return(NULL)
+
+    n_start <- max(1L, as.integer(yang_multistart$n_start))
+    top_k <- max(1L, min(n_start, as.integer(yang_multistart$top_k)))
+    short_ctrl <- modifyList(yang_ctrl, yang_multistart$short_ctrl)
+    refine_ctrl <- modifyList(yang_ctrl, yang_multistart$refine_ctrl)
+
+    # Step 1: cheap screening
+    short_fits <- vector("list", n_start)
+    short_obj <- numeric(n_start)
+    for (i in seq_len(n_start)) {
+      fit <- run_yang_once(seed_use = seed + i, ctrl = short_ctrl, fast = fast)
+      short_fits[[i]] <- fit
+      short_obj[i] <- tail(fit$obj_hist, 1)
+    }
+
+    # Step 2: Top-K re-ranking
+    top_idx <- order(short_obj)[seq_len(top_k)]
+
+    # Step 3: refine Top-K
+    refine_fits <- vector("list", top_k)
+    refine_obj <- numeric(top_k)
+    for (j in seq_len(top_k)) {
+      fit <- run_yang_once(seed_use = seed + top_idx[j], ctrl = refine_ctrl, fast = fast)
+      refine_fits[[j]] <- fit
+      refine_obj[j] <- tail(fit$obj_hist, 1)
+    }
+
+    # Final: best by objective
+    best_idx <- which.min(refine_obj)
+    list(
+      fit = refine_fits[[best_idx]],
+      best_obj = refine_obj[best_idx],
+      short_obj = short_obj,
+      refine_obj = refine_obj,
+      top_idx = top_idx
+    )
+  }
+
   # Yang (slow)
   if (include_yang_slow) {
     t_yang_slow <- system.time({
-      fit_yang_slow <- do.call(
-        yang_alg1_slts_slow,
-        c(list(
-          X = X,
-          y = y,
-          h = h,
-          lambda_abs = lambda_abs,
-          intercept = TRUE,
-          init = yang_init,
-          seed = seed,
-          verbose = verbose
-        ), yang_ctrl)
-      )
+      if (isTRUE(yang_multistart$enable)) {
+        ms <- run_yang_multistart(fast = FALSE)
+        fit_yang_slow <- ms$fit
+      } else {
+        fit_yang_slow <- run_yang_once(seed_use = seed, ctrl = yang_ctrl, fast = FALSE)
+      }
     })
     results$yang_slow <- list(fit = fit_yang_slow, time = t_yang_slow)
   }
 
   # Yang (fast)
   t_yang_fast <- system.time({
-    fit_yang_fast <- do.call(
-      yang_alg1_slts_fast,
-      c(list(
-        X = X,
-        y = y,
-        h = h,
-        lambda_abs = lambda_abs,
-        intercept = TRUE,
-        init = yang_init,
-        seed = seed,
-        support_eps = support_eps,
-        verbose = verbose
-      ), yang_ctrl)
-    )
+    if (isTRUE(yang_multistart$enable)) {
+      ms <- run_yang_multistart(fast = TRUE)
+      fit_yang_fast <- ms$fit
+    } else {
+      fit_yang_fast <- run_yang_once(seed_use = seed, ctrl = yang_ctrl, fast = TRUE)
+    }
   })
   results$yang_fast <- list(fit = fit_yang_fast, time = t_yang_fast)
 
