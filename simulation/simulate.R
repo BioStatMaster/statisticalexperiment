@@ -697,6 +697,13 @@ if (identical(environment(), globalenv())) {
     seed0 = 123,
     include_yang_slow = TRUE,
     include_yagishita = FALSE,
+    yang_multistart = list(
+      enable = TRUE,
+      n_start = 5,
+      top_k = 2,
+      short_ctrl = list(max_iter = 80, min_iter = 10, tol = 1e-3),
+      refine_ctrl = list(max_iter = 800, min_iter = 30, tol = 1e-6)
+    ),
     yang_init = "lasso",
     verbose = FALSE
   )
