@@ -204,7 +204,10 @@ compare_one_lambda_all <- function(
       verbose = verbose
     )
     if (fast) base_args$support_eps <- support_eps
-    do.call(fn, c(base_args, ctrl))
+    # Filter ctrl to only keep arguments supported by the target function.
+    allowed <- names(formals(fn))
+    ctrl_use <- ctrl[names(ctrl) %in% allowed]
+    do.call(fn, c(base_args, ctrl_use))
   }
 
   run_yang_multistart <- function(fast = TRUE) {
@@ -217,11 +220,13 @@ compare_one_lambda_all <- function(
 
     # Step 1: cheap screening
     short_fits <- vector("list", n_start)
-    short_obj <- numeric(n_start)
+    short_obj <- rep(Inf, n_start)
     for (i in seq_len(n_start)) {
       fit <- run_yang_once(seed_use = seed + i, ctrl = short_ctrl, fast = fast)
       short_fits[[i]] <- fit
-      short_obj[i] <- tail(fit$obj_hist, 1)
+      if (!is.null(fit$obj_hist) && length(fit$obj_hist) > 0) {
+        short_obj[i] <- tail(fit$obj_hist, 1)
+      }
     }
 
     # Step 2: Top-K re-ranking
@@ -229,11 +234,13 @@ compare_one_lambda_all <- function(
 
     # Step 3: refine Top-K
     refine_fits <- vector("list", top_k)
-    refine_obj <- numeric(top_k)
+    refine_obj <- rep(Inf, top_k)
     for (j in seq_len(top_k)) {
       fit <- run_yang_once(seed_use = seed + top_idx[j], ctrl = refine_ctrl, fast = fast)
       refine_fits[[j]] <- fit
-      refine_obj[j] <- tail(fit$obj_hist, 1)
+      if (!is.null(fit$obj_hist) && length(fit$obj_hist) > 0) {
+        refine_obj[j] <- tail(fit$obj_hist, 1)
+      }
     }
 
     # Final: best by objective

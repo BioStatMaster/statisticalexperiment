@@ -124,8 +124,10 @@ yang_alg1_slts_slow <- function(
     }
 
     if (t >= max(min_iter, 2)) {
-      relchg <- abs(obj_hist[t] - obj_hist[t - 1]) / (abs(obj_hist[t - 1]) + 1e-12)
-      if (relchg < tol && stable_count >= stable_H_K) break
+      if (is.finite(obj_hist[t]) && is.finite(obj_hist[t - 1])) {
+        relchg <- abs(obj_hist[t] - obj_hist[t - 1]) / (abs(obj_hist[t - 1]) + 1e-12)
+        if (relchg < tol && stable_count >= stable_H_K) break
+      }
     }
   }
 
@@ -303,10 +305,12 @@ yang_alg1_slts_fast <- function(
     }
 
     if (t >= max(min_iter, 2)) {
-      relchg <- abs(obj_hist[t] - obj_hist[t - 1]) / (abs(obj_hist[t - 1]) + 1e-12)
-      stop_ok <- (relchg < tol && stable_count >= stable_H_K)
-      if (use_support_stop) stop_ok <- stop_ok && (stableS_count >= stable_S_K)
-      if (stop_ok) break
+      if (is.finite(obj_hist[t]) && is.finite(obj_hist[t - 1])) {
+        relchg <- abs(obj_hist[t] - obj_hist[t - 1]) / (abs(obj_hist[t - 1]) + 1e-12)
+        stop_ok <- (relchg < tol && stable_count >= stable_H_K)
+        if (use_support_stop) stop_ok <- stop_ok && (stableS_count >= stable_S_K)
+        if (stop_ok) break
+      }
     }
   }
 

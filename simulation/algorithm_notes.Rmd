@@ -1,0 +1,134 @@
+---
+title: "SLTS/STRLS Simulation Notes"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview
+
+This document summarizes the **algorithms**, **objective functions**, and **code structure** used
+in the simulation runner under `simulation/`. It is intended as a concise reference for users
+who want to understand or modify the workflow.
+
+## Common objective (SLTS scale)
+
+All methods are compared using a **shared SLTS-scale objective** so that a single
+`lambda_abs` can be used across implementations:
+
+\[
+Q(\beta_0, \beta) = \sum_{i \in H} r_i^2 + h\,\lambda_{abs}\,\|\beta\|_1
+\]
+
+- \(r = y - (\beta_0\mathbf{1} + X\beta)\)
+- \(H\) is the set of indices for the smallest \(h\) squared residuals.
+
+In code, this is implemented in `simulation/utils.R`:
+
+```{r, eval=FALSE}
+obj_slts <- function(y, X, beta0, beta, h, lambda_abs) {
+  r <- as.numeric(y - (beta0 + X %*% beta))
+  r2 <- r^2
+  H <- pick_h_smallest(r2, h)
+  sum(r2[H]) + h * lambda_abs * sum(abs(beta))
+}
+```
+
+## Algorithm layout
+
+- `simulation/algorithms/yang.R`
+  - `yang_alg1_slts_slow()`
+  - `yang_alg1_slts_fast()`
+- `simulation/algorithms/yagishita.R`
+  - `yagishita_alg1_slts_slow()`
+  - `yagishita_alg1_slts_fast()`
+- `simulation/utils.R`
+  - shared helpers (soft-thresholding, objective, metrics)
+- `simulation/simulate.R`
+  - simulation driver and plotting
+
+# Yang Algorithm (SLTS)
+
+## 목적 (Objective)
+Yang 알고리즘은 **SLTS 목적함수**를 풀기 위해
+`prox-gradient + trimming`을 사용합니다. 공통 비교를 위해 동일한
+\(Q(\beta_0, \beta)\)를 평가합니다.
+
+## Slow vs Fast
+
+- **Slow 버전** (`yang_alg1_slts_slow`)
+  - 매 반복마다 **전체 residual**을 재계산.
+  - line-search 중에도 full residual 계산.
+
+- **Fast 버전** (`yang_alg1_slts_fast`)
+  - residual을 **증분 업데이트** (`r <- r - d0 - X db`).
+  - line-search에서 **H subset만** 계산.
+
+두 버전 모두 동일한 SLTS objective로 비교되며, fast 버전이
+속도 개선판입니다.
+
+# Yagishita Algorithm (STRLS/SLTS)
+
+## 목적 (Objective)
+Yagishita 알고리즘은 STRLS 보조변수 \(\alpha\)를 사용하는 형태지만,
+SLTS와 **동치**가 되도록 내부적으로 \(\lambda\) 스케일링을 적용합니다.
+
+\[
+\lambda_{internal} = \frac{h\,\lambda_{abs}}{4}
+\]
+
+이렇게 하면 SLTS objective와 동일한 minimizer를 얻을 수 있습니다.
+
+## Slow vs Fast
+
+- **Slow 버전** (`yagishita_alg1_slts_slow`)
+  - line-search 후보마다 `X %*% beta_new`를 재계산.
+
+- **Fast 버전** (`yagishita_alg1_slts_fast`)
+  - residual을 **증분 갱신**하여 계산량을 줄임.
+
+# Multi-start + Top-K Refinement (Yang)
+
+Simulation runner에는 **cheap multi-start + Top-K refinement** 옵션이 있습니다:
+
+1. **짧은 반복**으로 N개 후보 생성
+2. 목적함수 기준으로 **Top-K 후보** 선택
+3. 선택된 후보만 **정밀 반복**하여 최종 해 결정
+
+코드 위치: `simulation/simulate.R`의 `run_yang_multistart()`.
+
+# Simulation workflow
+
+`simulation/simulate.R`의 `run_metrics_vs_n_one_lambda()`가
+전체 시뮬레이션 루프를 실행합니다.
+
+- 데이터 생성: `simulate_contaminated()`
+- 알고리즘 실행: `compare_one_lambda_all()`
+- 성능 요약: `summarize_by_n_metric()`
+- 시각화: `plot_metric_vs_n()`
+
+각 함수는 상단 주석에 간단한 설명이 포함되어 있습니다.
+
+# Example usage
+
+```{r, eval=FALSE}
+res_long <- run_metrics_vs_n_one_lambda(
+  n_grid = c(200, 500),
+  p = 100,
+  R = 3,
+  beta_dist = "uniform",
+  beta_range = c(0.5, 1.5),
+  lambda_abs = 0.5,
+  include_yang_slow = TRUE,
+  include_yagishita = FALSE,
+  yang_multistart = list(
+    enable = TRUE,
+    n_start = 5,
+    top_k = 2,
+    short_ctrl = list(max_iter = 80, min_iter = 10, tol = 1e-3),
+    refine_ctrl = list(max_iter = 800, min_iter = 30, tol = 1e-6)
+  )
+)
+```
