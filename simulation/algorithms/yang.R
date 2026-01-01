@@ -13,7 +13,7 @@
 yang_alg1_slts_slow <- function(
     X, y, h, lambda_abs,
     intercept = TRUE,
-    init = c("lasso", "zero"),
+    init = c("lasso", "zero", "random"),
     seed = 1,
     max_iter = 2000,
     tol = 1e-6,
@@ -57,9 +57,12 @@ yang_alg1_slts_slow <- function(
       beta0 <- 0
       beta <- cf
     }
-  } else {
+  } else if (init == "zero") {
     beta0 <- if (intercept) mean(y) else 0
     beta <- rep(0, p)
+  } else {
+    beta0 <- if (intercept) rnorm(1) else 0
+    beta <- rnorm(p)
   }
 
   eta <- eta_init
@@ -105,8 +108,9 @@ yang_alg1_slts_slow <- function(
     beta <- beta_new
 
     r_up <- as.numeric(y - (beta0 + X %*% beta))
-    H_new <- sort(pick_h_smallest(r_up^2, h))
-    obj_now <- sum(r_up^2[H_new]) + h * lambda_abs * sum(abs(beta))
+    r_up_sq <- r_up * r_up
+    H_new <- as.integer(sort(pick_h_smallest(r_up_sq, h)))
+    obj_now <- sum(r_up_sq[H_new], na.rm = TRUE) + h * lambda_abs * sum(abs(beta))
     obj_hist <- c(obj_hist, obj_now)
 
     if (length(H_prev) == h && identical(H_new, H_prev)) {
@@ -126,8 +130,10 @@ yang_alg1_slts_slow <- function(
     if (t >= max(min_iter, 2)) {
       if (is.finite(obj_hist[t]) && is.finite(obj_hist[t - 1])) {
         relchg <- abs(obj_hist[t] - obj_hist[t - 1]) / (abs(obj_hist[t - 1]) + 1e-12)
-        if (relchg < tol && stable_count >= stable_H_K) break
+      } else {
+        relchg <- Inf
       }
+      if (relchg < tol && stable_count >= stable_H_K) break
     }
   }
 
@@ -149,7 +155,7 @@ yang_alg1_slts_slow <- function(
 yang_alg1_slts_fast <- function(
     X, y, h, lambda_abs,
     intercept = TRUE,
-    init = c("lasso", "zero"),
+    init = c("lasso", "zero", "random"),
     seed = 1,
     max_iter = 2000,
     tol = 1e-6,
@@ -195,9 +201,12 @@ yang_alg1_slts_fast <- function(
       beta0 <- 0
       beta <- cf
     }
-  } else {
+  } else if (init == "zero") {
     beta0 <- if (intercept) mean(y) else 0
     beta <- rep(0, p)
+  } else {
+    beta0 <- if (intercept) rnorm(1) else 0
+    beta <- rnorm(p)
   }
 
   r <- as.numeric(y - (beta0 + X %*% beta))
@@ -276,7 +285,7 @@ yang_alg1_slts_fast <- function(
 
     r2 <- r^2
     H_new <- sort.int(pick_h_smallest(r2, h))
-    obj_now <- sum(r2[H_new]) + h * lambda_abs * sum(abs(beta))
+    obj_now <- sum(r2[H_new], na.rm = TRUE) + h * lambda_abs * sum(abs(beta))
     obj_hist[t] <- obj_now
 
     if (identical(H_new, H_prev)) {
@@ -307,10 +316,12 @@ yang_alg1_slts_fast <- function(
     if (t >= max(min_iter, 2)) {
       if (is.finite(obj_hist[t]) && is.finite(obj_hist[t - 1])) {
         relchg <- abs(obj_hist[t] - obj_hist[t - 1]) / (abs(obj_hist[t - 1]) + 1e-12)
-        stop_ok <- (relchg < tol && stable_count >= stable_H_K)
-        if (use_support_stop) stop_ok <- stop_ok && (stableS_count >= stable_S_K)
-        if (stop_ok) break
+      } else {
+        relchg <- Inf
       }
+      stop_ok <- (relchg < tol && stable_count >= stable_H_K)
+      if (use_support_stop) stop_ok <- stop_ok && (stableS_count >= stable_S_K)
+      if (stop_ok) break
     }
   }
 

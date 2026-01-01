@@ -135,6 +135,8 @@ compare_one_lambda_all <- function(
     include_yagishita = TRUE,
     yang_multistart = list(
       enable = FALSE,
+      apply_to = "fast",
+      init = NULL,
       n_start = 5,
       top_k = 2,
       short_ctrl = list(max_iter = 80, min_iter = 10, tol = 1e-3),
@@ -191,7 +193,7 @@ compare_one_lambda_all <- function(
   #  2) select Top-K by objective
   #  3) refine only Top-K with longer iterations
   # This pattern improves robustness without heavy cost.
-  run_yang_once <- function(seed_use, ctrl, fast = TRUE) {
+  run_yang_once <- function(seed_use, ctrl, fast = TRUE, init_override = NULL) {
     fn <- if (fast) yang_alg1_slts_fast else yang_alg1_slts_slow
     base_args <- list(
       X = X,
@@ -199,7 +201,7 @@ compare_one_lambda_all <- function(
       h = h,
       lambda_abs = lambda_abs,
       intercept = TRUE,
-      init = yang_init,
+      init = if (is.null(init_override)) yang_init else init_override,
       seed = seed_use,
       verbose = verbose
     )
@@ -226,7 +228,12 @@ compare_one_lambda_all <- function(
     short_fits <- vector("list", n_start)
     short_obj <- rep(Inf, n_start)
     for (i in seq_len(n_start)) {
-      fit <- run_yang_once(seed_use = seed + i, ctrl = short_ctrl, fast = fast)
+      fit <- run_yang_once(
+        seed_use = seed + i,
+        ctrl = short_ctrl,
+        fast = fast,
+        init_override = yang_multistart$init
+      )
       short_fits[[i]] <- fit
       if (!is.null(fit$obj_hist) && length(fit$obj_hist) > 0) {
         short_obj[i] <- tail(fit$obj_hist, 1)
@@ -240,7 +247,12 @@ compare_one_lambda_all <- function(
     refine_fits <- vector("list", top_k)
     refine_obj <- rep(Inf, top_k)
     for (j in seq_len(top_k)) {
-      fit <- run_yang_once(seed_use = seed + top_idx[j], ctrl = refine_ctrl, fast = fast)
+      fit <- run_yang_once(
+        seed_use = seed + top_idx[j],
+        ctrl = refine_ctrl,
+        fast = fast,
+        init_override = yang_multistart$init
+      )
       refine_fits[[j]] <- fit
       if (!is.null(fit$obj_hist) && length(fit$obj_hist) > 0) {
         refine_obj[j] <- tail(fit$obj_hist, 1)
@@ -261,19 +273,15 @@ compare_one_lambda_all <- function(
   # Yang (slow)
   if (include_yang_slow) {
     t_yang_slow <- system.time({
-      if (isTRUE(yang_multistart$enable)) {
-        ms <- run_yang_multistart(fast = FALSE)
-        fit_yang_slow <- ms$fit
-      } else {
-        fit_yang_slow <- run_yang_once(seed_use = seed, ctrl = yang_ctrl, fast = FALSE)
-      }
+      fit_yang_slow <- run_yang_once(seed_use = seed, ctrl = yang_ctrl, fast = FALSE)
     })
     results$yang_slow <- list(fit = fit_yang_slow, time = t_yang_slow)
   }
 
   # Yang (fast)
   t_yang_fast <- system.time({
-    if (isTRUE(yang_multistart$enable)) {
+    ms_apply <- if (!is.null(yang_multistart$apply_to)) yang_multistart$apply_to else "fast"
+    if (isTRUE(yang_multistart$enable) && ms_apply %in% c("fast", "both")) {
       ms <- run_yang_multistart(fast = TRUE)
       fit_yang_fast <- ms$fit
     } else {
@@ -471,6 +479,8 @@ run_metrics_vs_n_one_lambda <- function(
     include_yagishita = TRUE,
     yang_multistart = list(
       enable = FALSE,
+      apply_to = "fast",
+      init = NULL,
       n_start = 5,
       top_k = 2,
       short_ctrl = list(max_iter = 80, min_iter = 10, tol = 1e-3),
@@ -726,6 +736,8 @@ if (identical(environment(), globalenv())) {
     include_yagishita = FALSE,
     yang_multistart = list(
       enable = TRUE,
+      apply_to = "fast",
+      init = "random",
       n_start = 5,
       top_k = 2,
       short_ctrl = list(max_iter = 80, min_iter = 10, tol = 1e-3),
@@ -742,5 +754,23 @@ if (identical(environment(), globalenv())) {
     logy = FALSE,
     main = sprintf("Support recovery (F1) vs n (p=%d, R=%d, lambda=%.3f)", p, R, lambda_abs),
     ylab = "F1"
+  )
+
+  mse_sum <- summarize_by_n_metric(res_long, metric = "beta_mse")
+  plot_metric_vs_n(
+    mse_sum,
+    error = "se",
+    logy = FALSE,
+    main = sprintf("Beta MSE vs n (p=%d, R=%d, lambda=%.3f)", p, R, lambda_abs),
+    ylab = "beta MSE"
+  )
+
+  time_sum <- summarize_by_n_metric(res_long, metric = "elapsed_sec")
+  plot_metric_vs_n(
+    time_sum,
+    error = "se",
+    logy = TRUE,
+    main = sprintf("Elapsed time vs n (p=%d, R=%d, lambda=%.3f)", p, R, lambda_abs),
+    ylab = "elapsed (sec)"
   )
 }
