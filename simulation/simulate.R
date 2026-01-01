@@ -17,6 +17,7 @@ source("simulation/algorithms/yang.R")
 source("simulation/algorithms/yagishita.R")
 
 # ---- package checks
+# Helper: ensure required package is installed.
 require_pkg <- function(pkg) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
     stop(sprintf("Package '%s' is required but not installed.", pkg))
@@ -27,6 +28,7 @@ require_pkg <- function(pkg) {
 # beta_dist:
 #   - "fixed": beta_value is used for non-zero entries
 #   - "uniform": beta_i ~ Unif(beta_range[1], beta_range[2])
+# Generate contaminated regression data with leverage + response outliers.
 simulate_contaminated <- function(
     n = 120,
     p = 60,
@@ -74,6 +76,7 @@ simulate_contaminated <- function(
 }
 
 # ---- robustHD wrapper (sparseLTS)
+# Fit robustHD::sparseLTS with lambda_abs on SLTS scale.
 fit_sparseLTS_abs <- function(
     X, y, alpha_frac, lambda_abs,
     normalize = FALSE,
@@ -102,6 +105,7 @@ fit_sparseLTS_abs <- function(
   )
 }
 
+# Extract coefficients from sparseLTS fit.
 extract_sparseLTS_coef <- function(fit, intercept = TRUE) {
   raw <- NULL
   if (!is.null(fit$raw.coefficients)) raw <- fit$raw.coefficients
@@ -117,6 +121,7 @@ extract_sparseLTS_coef <- function(fit, intercept = TRUE) {
 }
 
 # ---- single-lambda comparison (all methods)
+# Run Yang/Yagishita/robustHD on a single lambda_abs and collect metrics.
 compare_one_lambda_all <- function(
     X, y,
     beta_true = NULL,
@@ -433,6 +438,7 @@ compare_one_lambda_all <- function(
 }
 
 # ---- simulation over n-grid
+# Run repeated simulations over n_grid and summarize metrics per method.
 run_metrics_vs_n_one_lambda <- function(
     n_grid,
     p = 100,
@@ -452,6 +458,13 @@ run_metrics_vs_n_one_lambda <- function(
     seed0 = 123,
     include_yang_slow = TRUE,
     include_yagishita = TRUE,
+    yang_multistart = list(
+      enable = FALSE,
+      n_start = 5,
+      top_k = 2,
+      short_ctrl = list(max_iter = 80, min_iter = 10, tol = 1e-3),
+      refine_ctrl = list(max_iter = 800, min_iter = 30, tol = 1e-6)
+    ),
     yang_init = "lasso",
     yang_ctrl = list(
       max_iter = 2000,
@@ -528,11 +541,12 @@ run_metrics_vs_n_one_lambda <- function(
         alpha_frac = alpha_frac,
         standardize = FALSE,
         support_eps = support_eps,
-        seed = seed_r,
-        include_yang_slow = include_yang_slow,
-        include_yagishita = include_yagishita,
-        yang_init = yang_init,
-        yang_ctrl = yang_ctrl,
+      seed = seed_r,
+      include_yang_slow = include_yang_slow,
+      include_yagishita = include_yagishita,
+      yang_multistart = yang_multistart,
+      yang_init = yang_init,
+      yang_ctrl = yang_ctrl,
         yagishita_ctrl = yagishita_ctrl,
         robust_nsamp = robust_nsamp,
         robust_ncstep = robust_ncstep,
@@ -580,6 +594,7 @@ run_metrics_vs_n_one_lambda <- function(
   do.call(rbind, out)
 }
 
+# Summarize a metric by n and method with mean/sd/se.
 summarize_by_n_metric <- function(
     res_long,
     metric = c("F1", "exact_support", "beta_mse", "elapsed_sec")
@@ -607,6 +622,7 @@ summarize_by_n_metric <- function(
   tmp
 }
 
+# Plot metric vs n with optional error bars.
 plot_metric_vs_n <- function(
     summary_df,
     error = c("se", "sd", "none"),
