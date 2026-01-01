@@ -206,7 +206,11 @@ compare_one_lambda_all <- function(
     if (fast) base_args$support_eps <- support_eps
     # Filter ctrl to only keep arguments supported by the target function.
     allowed <- names(formals(fn))
-    ctrl_use <- ctrl[names(ctrl) %in% allowed]
+    ctrl_use <- ctrl[intersect(names(ctrl), allowed)]
+    if (!fast) {
+      ctrl_use$use_support_stop <- NULL
+      ctrl_use$stable_S_K <- NULL
+    }
     do.call(fn, c(base_args, ctrl_use))
   }
 
