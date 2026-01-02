@@ -5,6 +5,30 @@
 # - tune_scales_per_method(): 스케일(람다 계수) 튜닝
 # - benchmark_methods(): 메트릭 계산
 
+allowed_methods <- c(
+  "robustHD::sparseLTS",
+  "SWLTS-PALM",
+  "DCA-TopK-LTS",
+  "Yang",
+  "iYang",
+  "Yag-orig",
+  "Yag-fast",
+  "DCA",
+  "DCA_fast",
+  "BDCA_fast"
+)
+
+validate_methods <- function(methods) {
+  unknown <- setdiff(methods, allowed_methods)
+  if (length(unknown) > 0) {
+    stop(sprintf(
+      "Unknown method(s): %s\nAllowed: %s",
+      paste(unknown, collapse = ", "),
+      paste(allowed_methods, collapse = ", ")
+    ))
+  }
+}
+
 f1_score <- function(truth_idx, pred_idx, n_total) {
   truth <- rep(FALSE, n_total)
   pred <- rep(FALSE, n_total)
@@ -94,6 +118,7 @@ benchmark_methods <- function(sim_full,
                               seed = 1,
                               verbose = FALSE) {
   set.seed(seed)
+  validate_methods(methods)
 
   X <- sim_full$X
   y <- sim_full$y
@@ -153,6 +178,7 @@ tune_scales_per_method <- function(sim_full,
                                    criterion = "MSE",
                                    verbose_each = FALSE) {
   set.seed(seed)
+  validate_methods(methods)
   X <- sim_full$X
   y <- sim_full$y
   n <- nrow(X)
