@@ -5,6 +5,8 @@
 # - tune_scales_per_method(): 스케일(람다 계수) 튜닝
 # - benchmark_methods(): 메트릭 계산
 
+built_in_methods <- c("DCA", "DCA_fast", "BDCA_fast")
+
 allowed_methods <- c(
   "robustHD::sparseLTS",
   "SWLTS-PALM",
@@ -13,9 +15,7 @@ allowed_methods <- c(
   "iYang",
   "Yag-orig",
   "Yag-fast",
-  "DCA",
-  "DCA_fast",
-  "BDCA_fast"
+  built_in_methods
 )
 
 validate_methods <- function(methods) {
@@ -34,6 +34,20 @@ resolve_method_fitter <- function(method, method_fitters) {
     return(method_fitters[[method]])
   }
   NULL
+}
+
+ensure_method_fitters <- function(methods, method_fitters) {
+  needs_fitters <- setdiff(methods, built_in_methods)
+  if (length(needs_fitters) == 0) return(invisible(TRUE))
+  if (is.null(method_fitters)) method_fitters <- list()
+  missing <- setdiff(needs_fitters, names(method_fitters))
+  if (length(missing) > 0) {
+    stop(sprintf(
+      "method_fitters에 등록되지 않은 메서드: %s",
+      paste(missing, collapse = ", ")
+    ))
+  }
+  invisible(TRUE)
 }
 
 f1_score <- function(truth_idx, pred_idx, n_total) {
@@ -134,6 +148,7 @@ benchmark_methods <- function(sim_full,
                               method_fitters = NULL) {
   set.seed(seed)
   validate_methods(methods)
+  ensure_method_fitters(methods, method_fitters)
 
   X <- sim_full$X
   y <- sim_full$y
@@ -203,6 +218,7 @@ tune_scales_per_method <- function(sim_full,
                                    method_fitters = NULL) {
   set.seed(seed)
   validate_methods(methods)
+  ensure_method_fitters(methods, method_fitters)
   X <- sim_full$X
   y <- sim_full$y
   n <- nrow(X)

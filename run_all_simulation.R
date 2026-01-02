@@ -40,23 +40,36 @@ c_lambda <- 1.0
 
 fixed_scales <- NULL
 method_fitters <- list()
-# 외부 알고리즘이 있다면 아래처럼 등록해서 사용하세요.
-# method_fitters[["robustHD::sparseLTS"]] <- function(X, y, alpha, lambda, verbose = FALSE) {
+# 외부 알고리즘은 패키지가 설치되어 있으면 자동으로 등록합니다.
+if (requireNamespace("robustHD", quietly = TRUE)) {
+  method_fitters[["robustHD::sparseLTS"]] <- function(X, y, alpha, lambda, verbose = FALSE) {
+    fit <- robustHD::sparseLTS(x = X, y = y, alpha = alpha, lambda = lambda)
+    if (is.null(fit$beta) || is.null(fit$intercept)) {
+      stop("robustHD::sparseLTS 결과에서 beta/intercept를 찾지 못했습니다.")
+    }
+    outlier_set <- if (!is.null(fit$raw$best)) fit$raw$best else integer(0)
+    list(beta0 = fit$intercept, beta = fit$beta, outlier_set = outlier_set)
+  }
+}
+
+# 추가 외부 알고리즘은 아래처럼 등록해서 사용하세요.
+# method_fitters[["SWLTS-PALM"]] <- function(X, y, alpha, lambda, verbose = FALSE) {
 #   # 반환값은 list(beta0=..., beta=..., outlier_set=...) 형태여야 합니다.
 # }
 
-validate_method_fitters <- function(methods, fitters) {
-  built_in <- c("DCA", "DCA_fast", "BDCA_fast")
-  extra <- setdiff(methods, built_in)
-  if (length(extra) == 0) return(invisible(TRUE))
-  missing <- setdiff(extra, names(fitters))
-  if (length(missing) > 0) {
-    stop(sprintf("method_fitters에 등록되지 않은 메서드: %s", paste(missing, collapse = ", ")))
+resolve_methods_to_run <- function(methods, fitters) {
+  extra <- setdiff(methods, built_in_methods)
+  if (length(extra) == 0) return(methods)
+  registered <- intersect(extra, names(fitters))
+  kept <- unique(c(intersect(methods, built_in_methods), registered))
+  dropped <- setdiff(methods, kept)
+  if (length(dropped) > 0) {
+    message(sprintf("method_fitters 미등록으로 제외: %s", paste(dropped, collapse = ", ")))
   }
-  invisible(TRUE)
+  kept
 }
 
-validate_method_fitters(methods_to_run, method_fitters)
+methods_to_run <- resolve_methods_to_run(methods_to_run, method_fitters)
 if (!is.null(manual_lambda)) {
   if (length(manual_lambda) == 1) {
     fixed_scales <- setNames(rep(manual_lambda / c_lambda, length(methods_to_run)), methods_to_run)
