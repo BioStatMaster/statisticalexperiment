@@ -58,10 +58,12 @@ if (requireNamespace("robustHD", quietly = TRUE)) {
 # }
 
 resolve_methods_to_run <- function(methods, fitters) {
-  extra <- setdiff(methods, built_in_methods)
-  if (length(extra) == 0) return(methods)
-  registered <- intersect(extra, names(fitters))
-  kept <- unique(c(intersect(methods, built_in_methods), registered))
+  available <- names(default_method_fitters)
+  if (!is.null(fitters)) {
+    available <- unique(c(available, names(fitters)))
+  }
+  allowed <- intersect(methods, allowed_methods)
+  kept <- intersect(allowed, available)
   dropped <- setdiff(methods, kept)
   if (length(dropped) > 0) {
     message(sprintf("method_fitters 미등록으로 제외: %s", paste(dropped, collapse = ", ")))

@@ -5,8 +5,6 @@
 # - tune_scales_per_method(): 스케일(람다 계수) 튜닝
 # - benchmark_methods(): 메트릭 계산
 
-built_in_methods <- c("DCA", "DCA_fast", "BDCA_fast")
-
 allowed_methods <- c(
   "robustHD::sparseLTS",
   "SWLTS-PALM",
@@ -15,7 +13,9 @@ allowed_methods <- c(
   "iYang",
   "Yag-orig",
   "Yag-fast",
-  built_in_methods
+  "DCA",
+  "DCA_fast",
+  "BDCA_fast"
 )
 
 validate_methods <- function(methods) {
@@ -29,18 +29,40 @@ validate_methods <- function(methods) {
   }
 }
 
+call_with_supported_args <- function(fn, args) {
+  keep <- names(formals(fn))
+  args <- args[names(args) %in% keep]
+  do.call(fn, args)
+}
+
+default_method_fitters <- list(
+  DCA = function(X, y, alpha, lambda, verbose = FALSE) {
+    dca_sparse_lts_lasso(X, y, alpha = alpha, lambda = lambda, verbose = verbose)
+  },
+  DCA_fast = function(X, y, alpha, lambda, verbose = FALSE) {
+    dca_sparse_lts_lasso_fast(X, y, alpha = alpha, lambda = lambda, verbose = verbose)
+  },
+  BDCA_fast = function(X, y, alpha, lambda, verbose = FALSE) {
+    bdca_sparse_lts_lasso_fast(X, y, alpha = alpha, lambda = lambda, verbose = verbose)
+  }
+)
+
 resolve_method_fitter <- function(method, method_fitters) {
   if (!is.null(method_fitters) && !is.null(method_fitters[[method]])) {
     return(method_fitters[[method]])
+  }
+  if (!is.null(default_method_fitters[[method]])) {
+    return(default_method_fitters[[method]])
   }
   NULL
 }
 
 ensure_method_fitters <- function(methods, method_fitters) {
-  needs_fitters <- setdiff(methods, built_in_methods)
-  if (length(needs_fitters) == 0) return(invisible(TRUE))
-  if (is.null(method_fitters)) method_fitters <- list()
-  missing <- setdiff(needs_fitters, names(method_fitters))
+  available <- names(default_method_fitters)
+  if (!is.null(method_fitters)) {
+    available <- unique(c(available, names(method_fitters)))
+  }
+  missing <- setdiff(methods, available)
   if (length(missing) > 0) {
     stop(sprintf(
       "method_fitters에 등록되지 않은 메서드: %s",
@@ -116,19 +138,13 @@ simulate_contaminated_lm <- function(n, p, s,
 fit_method <- function(method, X, y, alpha, lambda, verbose = FALSE, method_fitters = NULL) {
   fitter <- resolve_method_fitter(method, method_fitters)
   if (!is.null(fitter)) {
-    return(fitter(X, y, alpha = alpha, lambda = lambda, verbose = verbose))
-  }
-  if (method == "DCA") {
-    return(dca_sparse_lts_lasso(X, y, alpha = alpha, lambda = lambda, verbose = verbose))
-  }
-  if (method == "DCA_fast") {
-    return(dca_sparse_lts_lasso_fast(X, y, alpha = alpha, lambda = lambda, verbose = verbose))
-  }
-  if (method == "BDCA_fast") {
-    return(bdca_sparse_lts_lasso_fast(X, y, alpha = alpha, lambda = lambda, verbose = verbose))
+    return(call_with_supported_args(
+      fitter,
+      list(X = X, y = y, alpha = alpha, lambda = lambda, verbose = verbose)
+    ))
   }
   stop(sprintf(
-    "Unknown method: %s. Provide a matching entry in method_fitters or use built-in DCA variants.",
+    "Unknown method: %s. Provide a matching entry in method_fitters.",
     method
   ))
 }
