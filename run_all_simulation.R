@@ -39,6 +39,11 @@ criterion <- "MSE"
 c_lambda <- 1.0
 
 fixed_scales <- NULL
+method_fitters <- list()
+# 외부 알고리즘이 있다면 아래처럼 등록해서 사용하세요.
+# method_fitters[["robustHD::sparseLTS"]] <- function(X, y, alpha, lambda, verbose = FALSE) {
+#   # 반환값은 list(beta0=..., beta=..., outlier_set=...) 형태여야 합니다.
+# }
 if (!is.null(manual_lambda)) {
   if (length(manual_lambda) == 1) {
     fixed_scales <- setNames(rep(manual_lambda / c_lambda, length(methods_to_run)), methods_to_run)
@@ -60,6 +65,7 @@ result <- run_n_experiment(
   criterion = criterion,
   fixed_scales = fixed_scales,
   c_lambda = c_lambda,
+  method_fitters = method_fitters,
   verbose_each_iter = TRUE
 )
 

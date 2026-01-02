@@ -87,6 +87,8 @@ run_n_experiment <- function(
   criterion = "MSE",          # "MSE" or "F1_support" or "F1_outlier"
   # if do_tune = FALSE, use this fixed scales
   fixed_scales = NULL,
+  # optional custom method fitters
+  method_fitters = NULL,
   # seeds / print
   seed_base = 1000,
   verbose_each_iter = TRUE
@@ -128,7 +130,8 @@ run_n_experiment <- function(
           standardize_for_fair = standardize_for_fair,
           seed = 1,
           criterion = criterion,
-          verbose_each = FALSE
+          verbose_each = FALSE,
+          method_fitters = method_fitters
         )
 
         best_scales <- resolve_best_scales(
@@ -159,7 +162,8 @@ run_n_experiment <- function(
         scale_by_method = best_scales,
         standardize_for_fair = standardize_for_fair,
         seed = 1,
-        verbose = FALSE
+        verbose = FALSE,
+        method_fitters = method_fitters
       )
 
       tbl$n <- ni
