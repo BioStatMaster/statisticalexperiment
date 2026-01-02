@@ -44,6 +44,19 @@ method_fitters <- list()
 # method_fitters[["robustHD::sparseLTS"]] <- function(X, y, alpha, lambda, verbose = FALSE) {
 #   # 반환값은 list(beta0=..., beta=..., outlier_set=...) 형태여야 합니다.
 # }
+
+validate_method_fitters <- function(methods, fitters) {
+  built_in <- c("DCA", "DCA_fast", "BDCA_fast")
+  extra <- setdiff(methods, built_in)
+  if (length(extra) == 0) return(invisible(TRUE))
+  missing <- setdiff(extra, names(fitters))
+  if (length(missing) > 0) {
+    stop(sprintf("method_fitters에 등록되지 않은 메서드: %s", paste(missing, collapse = ", ")))
+  }
+  invisible(TRUE)
+}
+
+validate_method_fitters(methods_to_run, method_fitters)
 if (!is.null(manual_lambda)) {
   if (length(manual_lambda) == 1) {
     fixed_scales <- setNames(rep(manual_lambda / c_lambda, length(methods_to_run)), methods_to_run)
@@ -51,22 +64,35 @@ if (!is.null(manual_lambda)) {
     if (is.null(names(manual_lambda))) {
       stop("manual_lambda가 여러 개면 method 이름이 필요합니다.")
     }
+    missing_lambda <- setdiff(methods_to_run, names(manual_lambda))
+    if (length(missing_lambda) > 0) {
+      stop(sprintf("manual_lambda에 없는 메서드: %s", paste(missing_lambda, collapse = ", ")))
+    }
     fixed_scales <- manual_lambda[methods_to_run] / c_lambda
   }
   do_tune <- FALSE
 }
 
-result <- run_n_experiment(
-  n_grid = n_grid,
-  R_rep = 3,
-  methods_to_run = methods_to_run,
-  do_tune = do_tune,
-  scale_grid = scale_grid,
-  criterion = criterion,
-  fixed_scales = fixed_scales,
-  c_lambda = c_lambda,
-  method_fitters = method_fitters,
-  verbose_each_iter = TRUE
+call_with_supported_args <- function(fn, args) {
+  keep <- names(formals(fn))
+  args <- args[names(args) %in% keep]
+  do.call(fn, args)
+}
+
+result <- call_with_supported_args(
+  run_n_experiment,
+  list(
+    n_grid = n_grid,
+    R_rep = 3,
+    methods_to_run = methods_to_run,
+    do_tune = do_tune,
+    scale_grid = scale_grid,
+    criterion = criterion,
+    fixed_scales = fixed_scales,
+    c_lambda = c_lambda,
+    method_fitters = method_fitters,
+    verbose_each_iter = TRUE
+  )
 )
 
 # -----------------------------

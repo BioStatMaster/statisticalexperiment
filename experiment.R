@@ -12,6 +12,12 @@ source("simulation/simulation_helpers.R")
   if (!is.null(x)) x else y
 }
 
+call_with_supported_args <- function(fn, args) {
+  keep <- names(formals(fn))
+  args <- args[names(args) %in% keep]
+  do.call(fn, args)
+}
+
 # Derive best scales robustly from tuning output
 resolve_best_scales <- function(tuned, methods, scale_grid, criterion) {
   # 1) if tuned already provides best_scales and it looks complete, use it
@@ -119,19 +125,22 @@ run_n_experiment <- function(
 
       # 2) choose scales (tune or fixed)
       if (do_tune) {
-        tuned <- tune_scales_per_method(
-          sim_full = sim,
-          methods = methods_to_run,
-          scale_grid = scale_grid,
-          val_frac = val_frac,
-          tune_seed = seed_i + 999,  # 튜닝 split seed
-          alpha = alpha,
-          c_lambda = c_lambda,
-          standardize_for_fair = standardize_for_fair,
-          seed = 1,
-          criterion = criterion,
-          verbose_each = FALSE,
-          method_fitters = method_fitters
+        tuned <- call_with_supported_args(
+          tune_scales_per_method,
+          list(
+            sim_full = sim,
+            methods = methods_to_run,
+            scale_grid = scale_grid,
+            val_frac = val_frac,
+            tune_seed = seed_i + 999,  # 튜닝 split seed
+            alpha = alpha,
+            c_lambda = c_lambda,
+            standardize_for_fair = standardize_for_fair,
+            seed = 1,
+            criterion = criterion,
+            verbose_each = FALSE,
+            method_fitters = method_fitters
+          )
         )
 
         best_scales <- resolve_best_scales(
@@ -154,16 +163,19 @@ run_n_experiment <- function(
       }
 
       # 3) final evaluation on test set (original sim$X_test)
-      tbl <- benchmark_methods(
-        sim,
-        methods = methods_to_run,
-        alpha = alpha,
-        c_lambda = c_lambda,
-        scale_by_method = best_scales,
-        standardize_for_fair = standardize_for_fair,
-        seed = 1,
-        verbose = FALSE,
-        method_fitters = method_fitters
+      tbl <- call_with_supported_args(
+        benchmark_methods,
+        list(
+          sim_full = sim,
+          methods = methods_to_run,
+          alpha = alpha,
+          c_lambda = c_lambda,
+          scale_by_method = best_scales,
+          standardize_for_fair = standardize_for_fair,
+          seed = 1,
+          verbose = FALSE,
+          method_fitters = method_fitters
+        )
       )
 
       tbl$n <- ni
