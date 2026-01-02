@@ -224,17 +224,8 @@ plot_metrics_vs_n <- function(res_mean) {
 }
 
 ############################################################
-## (C) 사용 예시
+## (C) 실행 스크립트 안내
 ############################################################
-# 아래 예시는 필요한 함수들이 정의되어 있다는 가정 하에 동작합니다.
-# (simulate_contaminated_lm, tune_scales_per_method, benchmark_methods)
-#
-# methods_to_run <- c("method_a", "method_b")
-# result <- run_n_experiment(
-#   n_grid = c(200, 500),
-#   R_rep = 2,
-#   methods_to_run = methods_to_run,
-#   do_tune = TRUE
-# )
-#
-# plot_metrics_vs_n(result$res_mean)
+# 실제 전체 시뮬레이션을 돌리는 코드는 run_all_simulation.R에 있습니다.
+# 해당 파일을 실행하면 모든 알고리즘(DCA, DCA_fast, BDCA_fast)에 대해
+# n-grid 실험과 플롯을 수행합니다.
