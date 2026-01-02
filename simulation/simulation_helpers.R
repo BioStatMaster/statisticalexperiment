@@ -5,6 +5,37 @@
 # - tune_scales_per_method(): 스케일(람다 계수) 튜닝
 # - benchmark_methods(): 메트릭 계산
 
+allowed_methods <- c(
+  "robustHD::sparseLTS",
+  "SWLTS-PALM",
+  "DCA-TopK-LTS",
+  "Yang",
+  "iYang",
+  "Yag-orig",
+  "Yag-fast",
+  "DCA",
+  "DCA_fast",
+  "BDCA_fast"
+)
+
+validate_methods <- function(methods) {
+  unknown <- setdiff(methods, allowed_methods)
+  if (length(unknown) > 0) {
+    stop(sprintf(
+      "Unknown method(s): %s\nAllowed: %s",
+      paste(unknown, collapse = ", "),
+      paste(allowed_methods, collapse = ", ")
+    ))
+  }
+}
+
+resolve_method_fitter <- function(method, method_fitters) {
+  if (!is.null(method_fitters) && !is.null(method_fitters[[method]])) {
+    return(method_fitters[[method]])
+  }
+  NULL
+}
+
 f1_score <- function(truth_idx, pred_idx, n_total) {
   truth <- rep(FALSE, n_total)
   pred <- rep(FALSE, n_total)
@@ -68,7 +99,11 @@ simulate_contaminated_lm <- function(n, p, s,
   )
 }
 
-fit_method <- function(method, X, y, alpha, lambda, verbose = FALSE) {
+fit_method <- function(method, X, y, alpha, lambda, verbose = FALSE, method_fitters = NULL) {
+  fitter <- resolve_method_fitter(method, method_fitters)
+  if (!is.null(fitter)) {
+    return(fitter(X, y, alpha = alpha, lambda = lambda, verbose = verbose))
+  }
   if (method == "DCA") {
     return(dca_sparse_lts_lasso(X, y, alpha = alpha, lambda = lambda, verbose = verbose))
   }
@@ -78,7 +113,10 @@ fit_method <- function(method, X, y, alpha, lambda, verbose = FALSE) {
   if (method == "BDCA_fast") {
     return(bdca_sparse_lts_lasso_fast(X, y, alpha = alpha, lambda = lambda, verbose = verbose))
   }
-  stop(sprintf("Unknown method: %s", method))
+  stop(sprintf(
+    "Unknown method: %s. Provide a matching entry in method_fitters or use built-in DCA variants.",
+    method
+  ))
 }
 
 extract_predictions <- function(fit, X) {
@@ -92,8 +130,10 @@ benchmark_methods <- function(sim_full,
                               scale_by_method = NULL,
                               standardize_for_fair = TRUE,
                               seed = 1,
-                              verbose = FALSE) {
+                              verbose = FALSE,
+                              method_fitters = NULL) {
   set.seed(seed)
+  validate_methods(methods)
 
   X <- sim_full$X
   y <- sim_full$y
@@ -115,7 +155,15 @@ benchmark_methods <- function(sim_full,
     lambda <- c_lambda * scale
 
     start_time <- Sys.time()
-    fit <- fit_method(m, X, y, alpha = alpha, lambda = lambda, verbose = verbose)
+    fit <- fit_method(
+      m,
+      X,
+      y,
+      alpha = alpha,
+      lambda = lambda,
+      verbose = verbose,
+      method_fitters = method_fitters
+    )
     elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 
     pred_test <- extract_predictions(fit, X_test)
@@ -151,8 +199,10 @@ tune_scales_per_method <- function(sim_full,
                                    standardize_for_fair = TRUE,
                                    seed = 1,
                                    criterion = "MSE",
-                                   verbose_each = FALSE) {
+                                   verbose_each = FALSE,
+                                   method_fitters = NULL) {
   set.seed(seed)
+  validate_methods(methods)
   X <- sim_full$X
   y <- sim_full$y
   n <- nrow(X)
@@ -186,7 +236,15 @@ tune_scales_per_method <- function(sim_full,
 
     for (sc in scale_grid) {
       lambda <- c_lambda * sc
-      fit <- fit_method(m, X_train, y_train, alpha = alpha, lambda = lambda, verbose = verbose_each)
+      fit <- fit_method(
+        m,
+        X_train,
+        y_train,
+        alpha = alpha,
+        lambda = lambda,
+        verbose = verbose_each,
+        method_fitters = method_fitters
+      )
       pred_val <- extract_predictions(fit, X_val)
       mse <- mean((y_val - pred_val)^2)
 
